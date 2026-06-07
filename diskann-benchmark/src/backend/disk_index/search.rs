@@ -59,6 +59,9 @@ pub(super) struct PerThreadStats {
     pub p99_latency: MicroSeconds,
     pub p999_latency: MicroSeconds,
     pub mean_ios: f64,
+    pub p95_ios: f64,
+    pub p99_ios: f64,
+    pub p999_ios: f64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -148,6 +151,9 @@ impl DiskSearchResult {
                 p99_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_execution_time_us) as u64),
                 p999_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_execution_time_us) as u64),
                 mean_ios: statistics::get_mean_stats(&stats_vec, |s| s.total_io_operations),
+                p95_ios: statistics::get_percentile_stats(&stats_vec, 0.95, |s| s.total_io_operations as f64),
+                p99_ios: statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_io_operations as f64),
+                p999_ios: statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_io_operations as f64),
             };
             per_thread_stats.push(per_thread);
         }
@@ -516,8 +522,8 @@ impl fmt::Display for DiskSearchStats {
 
             writeln!(f, "  Per-Thread Stats (L={}):", r.search_l)?;
             for t in &r.per_thread_stats {
-                writeln!(f, "    Thread {}: queries={} mean_latency={:.1}us p95={} p99={} p999={} mean_ios={:.1}", 
-                    t.thread_id, t.num_queries, t.mean_latency, t.p95_latency, t.p99_latency, t.p999_latency, t.mean_ios)?;
+                writeln!(f, "    Thread {}: queries={} mean_latency={:.1}us p95={} p99={} p999={} mean_ios={:.1} p95_ios={:.1} p99_ios={:.1} p999_ios={:.1}", 
+                    t.thread_id, t.num_queries, t.mean_latency, t.p95_latency, t.p99_latency, t.p999_latency, t.mean_ios, t.p95_ios, t.p99_ios, t.p999_ios)?;
             }
         }
 
