@@ -49,7 +49,6 @@ pub(super) struct DiskSearchStats {
     span_metrics: serde_json::Value,
 }
 
-
 #[derive(Serialize, Deserialize, Debug)]
 pub(super) struct PerThreadStats {
     pub thread_id: usize,
@@ -62,6 +61,14 @@ pub(super) struct PerThreadStats {
     pub p95_ios: u64,
     pub p99_ios: u64,
     pub p999_ios: u64,
+    pub mean_io_time: f64,
+    pub p95_io_time: MicroSeconds,
+    pub p99_io_time: MicroSeconds,
+    pub p999_io_time: MicroSeconds,
+    pub mean_cpu_time: f64,
+    pub p95_cpu_time: MicroSeconds,
+    pub p99_cpu_time: MicroSeconds,
+    pub p999_cpu_time: MicroSeconds,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -136,24 +143,79 @@ impl DiskSearchResult {
             recall_value as f32
         };
 
-        
-        let mut per_thread_map: std::collections::HashMap<usize, Vec<QueryStatistics>> = std::collections::HashMap::new();
+        let mut per_thread_map: std::collections::HashMap<usize, Vec<QueryStatistics>> =
+            std::collections::HashMap::new();
         for s in statistics {
-            per_thread_map.entry(s.thread_id).or_default().push(s.clone());
+            per_thread_map
+                .entry(s.thread_id)
+                .or_default()
+                .push(s.clone());
         }
         let mut per_thread_stats = Vec::new();
         for (thread_id, stats_vec) in per_thread_map {
             let per_thread = PerThreadStats {
                 thread_id,
                 num_queries: stats_vec.len(),
-                mean_latency: statistics::get_mean_stats(&stats_vec, |s| s.total_execution_time_us as f64),
-                p95_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.95, |s| s.total_execution_time_us) as u64),
-                p99_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_execution_time_us) as u64),
-                p999_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_execution_time_us) as u64),
+                mean_latency: statistics::get_mean_stats(&stats_vec, |s| {
+                    s.total_execution_time_us as f64
+                }),
+                p95_latency: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.95,
+                    |s| s.total_execution_time_us,
+                ) as u64),
+                p99_latency: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.99,
+                    |s| s.total_execution_time_us,
+                ) as u64),
+                p999_latency: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.999,
+                    |s| s.total_execution_time_us,
+                ) as u64),
                 mean_ios: statistics::get_mean_stats(&stats_vec, |s| s.total_io_operations),
-                p95_ios: statistics::get_percentile_stats(&stats_vec, 0.95, |s| s.total_io_operations) as u64,
-                p99_ios: statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_io_operations) as u64,
-                p999_ios: statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_io_operations) as u64,
+                p95_ios: statistics::get_percentile_stats(&stats_vec, 0.95, |s| {
+                    s.total_io_operations
+                }) as u64,
+                p99_ios: statistics::get_percentile_stats(&stats_vec, 0.99, |s| {
+                    s.total_io_operations
+                }) as u64,
+                p999_ios: statistics::get_percentile_stats(&stats_vec, 0.999, |s| {
+                    s.total_io_operations
+                }) as u64,
+                mean_io_time: statistics::get_mean_stats(&stats_vec, |s| s.io_time_us as f64),
+                p95_io_time: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.95,
+                    |s| s.io_time_us,
+                ) as u64),
+                p99_io_time: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.99,
+                    |s| s.io_time_us,
+                ) as u64),
+                p999_io_time: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.999,
+                    |s| s.io_time_us,
+                ) as u64),
+                mean_cpu_time: statistics::get_mean_stats(&stats_vec, |s| s.cpu_time_us as f64),
+                p95_cpu_time: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.95,
+                    |s| s.cpu_time_us,
+                ) as u64),
+                p99_cpu_time: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.99,
+                    |s| s.cpu_time_us,
+                ) as u64),
+                p999_cpu_time: MicroSeconds::new(statistics::get_percentile_stats(
+                    &stats_vec,
+                    0.999,
+                    |s| s.cpu_time_us,
+                ) as u64),
             };
             per_thread_stats.push(per_thread);
         }
@@ -522,8 +584,8 @@ impl fmt::Display for DiskSearchStats {
 
             writeln!(f, "  Per-Thread Stats (L={}):", r.search_l)?;
             for t in &r.per_thread_stats {
-                writeln!(f, "    Thread {}: queries={} mean_latency={:.1}us p95={} p99={} p999={} mean_ios={:.1} p95_ios={} p99_ios={} p999_ios={}", 
-                    t.thread_id, t.num_queries, t.mean_latency, t.p95_latency, t.p99_latency, t.p999_latency, t.mean_ios, t.p95_ios, t.p99_ios, t.p999_ios)?;
+                writeln!(f, "    Thread {}: queries={} mean_latency={:.1}us p95={} p99={} p999={} mean_ios={:.1} p95_ios={} p99_ios={} p999_ios={} mean_io_time={:.1}us p95_io_time={} p99_io_time={} p999_io_time={} mean_cpu_time={:.1}us p95_cpu_time={} p99_cpu_time={} p999_cpu_time={}",
+                    t.thread_id, t.num_queries, t.mean_latency, t.p95_latency, t.p99_latency, t.p999_latency, t.mean_ios, t.p95_ios, t.p99_ios, t.p999_ios, t.mean_io_time, t.p95_io_time, t.p99_io_time, t.p999_io_time, t.mean_cpu_time, t.p95_cpu_time, t.p99_cpu_time, t.p999_cpu_time)?;
             }
         }
 
