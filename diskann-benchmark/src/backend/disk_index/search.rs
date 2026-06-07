@@ -49,6 +49,18 @@ pub(super) struct DiskSearchStats {
     span_metrics: serde_json::Value,
 }
 
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(super) struct PerThreadStats {
+    pub thread_id: usize,
+    pub num_queries: usize,
+    pub mean_latency: f64,
+    pub p95_latency: MicroSeconds,
+    pub p99_latency: MicroSeconds,
+    pub p999_latency: MicroSeconds,
+    pub mean_ios: f64,
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub(super) struct DiskSearchResult {
     pub(super) search_l: u32,
@@ -65,6 +77,7 @@ pub(super) struct DiskSearchResult {
     pub(super) mean_hops: f64,
     pub(super) cache_hit_percentage: f64,
     pub(super) recall: f32,
+    pub(super) per_thread_stats: Vec<PerThreadStats>,
 }
 
 impl DiskSearchResult {
@@ -120,6 +133,26 @@ impl DiskSearchResult {
             recall_value as f32
         };
 
+        
+        let mut per_thread_map: std::collections::HashMap<usize, Vec<QueryStatistics>> = std::collections::HashMap::new();
+        for s in statistics {
+            per_thread_map.entry(s.thread_id).or_default().push(s.clone());
+        }
+        let mut per_thread_stats = Vec::new();
+        for (thread_id, stats_vec) in per_thread_map {
+            let per_thread = PerThreadStats {
+                thread_id,
+                num_queries: stats_vec.len(),
+                mean_latency: statistics::get_mean_stats(&stats_vec, |s| s.total_execution_time_us as f64),
+                p95_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.95, |s| s.total_execution_time_us) as u64),
+                p99_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_execution_time_us) as u64),
+                p999_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_execution_time_us) as u64),
+                mean_ios: statistics::get_mean_stats(&stats_vec, |s| s.total_io_operations),
+            };
+            per_thread_stats.push(per_thread);
+        }
+        per_thread_stats.sort_by_key(|s| s.thread_id);
+
         Ok(DiskSearchResult {
             search_l,
             qps: if total_time_as_secs > 0.0 {
@@ -155,6 +188,7 @@ impl DiskSearchResult {
             mean_hops: statistics::get_mean_stats(statistics, |s| s.search_hops as f64),
             cache_hit_percentage,
             recall,
+            per_thread_stats,
         })
     }
 }
@@ -286,6 +320,7 @@ where
                 ) {
                     Ok(search_result) => {
                         *stats = search_result.stats.query_statistics;
+                        stats.thread_id = rayon::current_thread_index().unwrap_or(0);
                         *rc = search_result.results.len() as u32;
                         let actual_results = search_result
                             .results
@@ -478,6 +513,12 @@ impl fmt::Display for DiskSearchStats {
                 line.push_str(&format!("{:>width$}", v, width = *w));
             }
             writeln!(f, "{line}")?;
+
+            writeln!(f, "  Per-Thread Stats (L={}):", r.search_l)?;
+            for t in &r.per_thread_stats {
+                writeln!(f, "    Thread {}: queries={} mean_latency={:.1}us p95={} p99={} p999={} mean_ios={:.1}", 
+                    t.thread_id, t.num_queries, t.mean_latency, t.p95_latency, t.p99_latency, t.p999_latency, t.mean_ios)?;
+            }
         }
 
         Ok(())

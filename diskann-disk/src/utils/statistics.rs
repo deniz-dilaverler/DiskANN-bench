@@ -32,6 +32,9 @@ pub struct QueryStatistics {
 
     /// Number of hops performed during search.
     pub search_hops: u32,
+
+    /// Thread ID that executed this query.
+    pub thread_id: usize,
 }
 
 /// Calculates the percentile value of a specific metric in a list of QueryStats.
