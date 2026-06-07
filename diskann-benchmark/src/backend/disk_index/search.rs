@@ -151,9 +151,9 @@ impl DiskSearchResult {
                 p99_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_execution_time_us) as u64),
                 p999_latency: MicroSeconds::new(statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_execution_time_us) as u64),
                 mean_ios: statistics::get_mean_stats(&stats_vec, |s| s.total_io_operations),
-                p95_ios: statistics::get_percentile_stats(&stats_vec, 0.95, |s| s.total_io_operations as f64),
-                p99_ios: statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_io_operations as f64),
-                p999_ios: statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_io_operations as f64),
+                p95_ios: statistics::get_percentile_stats(&stats_vec, 0.95, |s| s.total_io_operations) as f64,
+                p99_ios: statistics::get_percentile_stats(&stats_vec, 0.99, |s| s.total_io_operations) as f64,
+                p999_ios: statistics::get_percentile_stats(&stats_vec, 0.999, |s| s.total_io_operations) as f64,
             };
             per_thread_stats.push(per_thread);
         }
