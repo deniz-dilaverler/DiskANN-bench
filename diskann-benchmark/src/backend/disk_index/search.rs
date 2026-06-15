@@ -241,6 +241,15 @@ where
     let mut search_results_per_l = Vec::with_capacity(search_params.search_list.len());
     let has_any_search_failed = AtomicBool::new(false);
 
+    let mut query_stats_file = std::fs::File::create(format!(
+        "query_stats_threads_{}_bw_{}.csv",
+        search_params.num_threads, search_params.beam_width
+    ))?;
+    std::io::Write::write_fmt(
+        &mut query_stats_file,
+        format_args!("L,total_execution_time_us,io_time_us,cpu_time_us,query_pq_preprocess_time_us,total_io_operations,comparisons_saved,total_comparisons,total_vertices_loaded,search_hops\n"),
+    )?;
+
     // Execute search iterations
     for &l in search_params.search_list.iter() {
         let mut statistics_vec: Vec<QueryStatistics> =
@@ -315,6 +324,27 @@ where
 
         if has_any_search_failed.load(std::sync::atomic::Ordering::Acquire) {
             anyhow::bail!("One or more searches failed. See logs for details.");
+        }
+
+        {
+            for stat in &statistics_vec {
+                std::io::Write::write_fmt(
+                    &mut query_stats_file,
+                    format_args!(
+                        "{},{},{},{},{},{},{},{},{},{}\n",
+                        l,
+                        stat.total_execution_time_us,
+                        stat.io_time_us,
+                        stat.cpu_time_us,
+                        stat.query_pq_preprocess_time_us,
+                        stat.total_io_operations,
+                        stat.comparisons_saved,
+                        stat.total_comparisons,
+                        stat.total_vertices_loaded,
+                        stat.search_hops
+                    ),
+                )?;
+            }
         }
 
         let search_result = DiskSearchResult::new(
